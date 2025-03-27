@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Character Interaction</title>
+
+    <link rel="stylesheet" href="front.css">
+    <style>
+        body {
+            font-family: system-ui;
+        }
+    </style>
+
+    <!--Camera-->
+    <script defer src="face-api.min.js"></script>
+    <style>
+        body {
+            padding: 0;
+            margin: 0;
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+
+        canvas {
+            position: absolute;
+            transform: translateZ(0);
+            /* Enable GPU acceleration */
+            /* width: 600;
+            height: 337; */
+
+        }
+
+
+
+        select {
+            font-size: 15px;
+            background-color: purple;
+            color: white;
+            padding: 5px;
+            border: none;
+            border-radius: 5px;
+            margin-bottom: 10px;
+            z-index: 10;
+            position: relative;
+        }
+    </style>
+    <script>
+        document.addEventListener("DOMContentLoaded", () => {
+            const video = document.getElementById("video");
+            const cameraSelect = document.getElementById("cameraSelect");
+            let currentStream = null;
+
+
+
+            Promise.all([
+                // faceapi.nets.ssdMobilenetv1.loadFromUri("https://raw.githubusercontent.com/justadudewhohacks/face-api.js/master/weights"),
+                // faceapi.nets.faceRecognitionNet.loadFromUri("https://raw.githubusercontent.com/justadudewhohacks/face-api.js/master/weights"),
+                // faceapi.nets.faceLandmark68Net.loadFromUri("https://raw.githubusercontent.com/justadudewhohacks/face-api.js/master/weights")
+                faceapi.nets.ssdMobilenetv1.loadFromUri("/models"),
+                faceapi.nets.faceRecognitionNet.loadFromUri("/models"),
+                faceapi.nets.faceLandmark68Net.loadFromUri("/models"),
+
+            ]).then(() => {
+                console.log("Models Loaded Successfully!");
+                startWebcam("environment"); // Default to back camera
+
+            }).catch(err => console.error("Error loading models:", err));
+
+
+            cameraSelect.addEventListener("change", () => {
+                startWebcam(cameraSelect.value);
+                console.log(cameraSelect.value);
+
+            });
+
+
+            function startWebcam(facingMode) {
+                if (currentStream) {
+                    currentStream.getTracks().forEach(track => track.stop());
+                }
+
+                navigator.mediaDevices.enumerateDevices()
+                    .then(devices => {
+                        const videoDevices = devices.filter(device => device.kind === "videoinput");
+
+                        console.log("Available video devices:", videoDevices);
+
+                        let selectedDeviceId = videoDevices[0]?.deviceId; // Default to first camera
+
+                        if (facingMode === "environment") {
+                            const backCamera = videoDevices.find(device =>
+                                device.label.toLowerCase().includes("back") || device.label.toLowerCase().includes("rear")
+                            );
+                            if (backCamera) {
+                                selectedDeviceId = backCamera.deviceId;
+                            }
+                        }
+
+                        console.log("Selected device ID:", selectedDeviceId);
+
+                        return navigator.mediaDevices.getUserMedia({
+                            video: {
+                                deviceId: selectedDeviceId ? { exact: selectedDeviceId } : undefined,
+                                frameRate: { ideal: 15 }
+                            }
+                        });
+                    })
+                    .then((stream) => {
+                        currentStream = stream;
+                        video.srcObject = stream;
+                    })
+                    .catch((error) => {
+                        console.error("Error accessing the camera: ", error);
+                    });
+            }
+
+
+
+
+            let imageData = [];
+
+            function getLabeledFaceDescriptions() {
+
+                console.log("label:");
+                let label1 = "";
+
+
+                console.log(label1);
+
+
+
+                const labels = "[Ahmed, Malek]";
+
+                const images = "[ahmed.png, malek.png]";
+
+                const groups = "[Customers, Employees]";
+
+
+
+                console.log("Labels >:", labels);
+                console.log("Images >:", images);
+                console.log("Groups >:", groups);
+
+                const labelArray = labels.split(",").map(label => label.replace(/[\[\]]/g, "").trim());
+                const imageArray = images.split(",");
+                const groupArray = groups.split(",").map(group => group.replace(/[\[\]]/g, "").trim());
+
+                imageData = labelArray.map((label, index) => ({
+                    label: label.replace(/[\[\]]/g, "").trim(),
+                    imageUrl: imageArray[index] ? `${imageArray[index].replace(/[\[\]]/g, "").trim()}` : "",
+                    group: groupArray[index] || "Unknown"
+                }));
+
+                console.log("Labels:", labelArray);
+                console.log("Images:", imageData);
+                console.log("Groups:", groupArray);
+
+                return Promise.all(
+                    labelArray.map(async (label, index) => {
+                        const descriptions = [];
+                        const filteredImages = imageData.filter(img => img.label === label);
+                        for (let i = 0; i < filteredImages.length; i++) {
+                            const img = await faceapi.fetchImage(filteredImages[i].imageUrl);
+                            const detections = await faceapi
+                                .detectSingleFace(img, new faceapi.SsdMobilenetv1Options({ minConfidence: 0.6 }))
+                                .withFaceLandmarks()
+                                .withFaceDescriptor();
+                            if (detections) {
+                                descriptions.push(detections.descriptor);
+                            }
+                        }
+                        return descriptions.length > 0 ? new faceapi.LabeledFaceDescriptors(label, descriptions) : null;
+                    })
+                ).then(results => results.filter(res => res !== null));
+            }
+
+
+
+            video.addEventListener("play", async () => {
+                // Remove any existing canvas
+                const existingCanvas = document.querySelector("canvas");
+                if (existingCanvas) {
+                    existingCanvas.remove();
+                }
+
+                const labeledFaceDescriptors = await getLabeledFaceDescriptions();
+                const faceMatcher = new faceapi.FaceMatcher(labeledFaceDescriptors, 0.5);
+
+                const canvas = faceapi.createCanvasFromMedia(video);
+
+                document.body.append(canvas);
+
+                const displaySize = { width: video.videoWidth, height: video.videoHeight };
+                faceapi.matchDimensions(canvas, displaySize);
+
+                const customerInfo = document.querySelector(".customer-info");
+                const btnRealtime = document.getElementById("btnRealtime");
+
+                let boxes = [];
+                setInterval(async () => {
+                    const ctx = canvas.getContext("2d");
+                    const detections = await faceapi
+                        .detectAllFaces(video, new faceapi.SsdMobilenetv1Options({ minConfidence: 0.6 }))
+                        .withFaceLandmarks()
+                        .withFaceDescriptors();
+                    const resizedDetections = faceapi.resizeResults(detections, displaySize);
+                    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+                    boxes = resizedDetections.map((d) => {
+                        const result = faceMatcher.findBestMatch(d.descriptor);
+                        const labelResult = result.distance > 0.5 ? "Unknown" : result.label;
+                        const matchedData = imageData.find(img => img.label === labelResult);
+                        const group = matchedData ? matchedData.group : "Unknown";
+                        return { box: d.detection.box, label: labelResult, group };
+                    });
+
+                    let recognizedFace = false;
+                    boxes.forEach(({ box, label, group }) => {
+                        let color = "gray";
+                        if (group === "Customers") color = "green";
+                        else if (group === "Employees") color = "blue";
+                        else if (group === "Others") color = "yellow";
+                        else if (label === "Unknown") color = "red";
+
+                        ctx.strokeStyle = color;
+                        ctx.lineWidth = 2;
+                        ctx.strokeRect(box.x - 210, box.y + 130, box.width, box.height + 30);
+
+                        ctx.font = "bold 14px Arial";
+                        ctx.fillStyle = color;
+
+                        const text = label === "Unknown" ? "Unknown" : `${label} (${group})`;
+                        const textWidth = ctx.measureText(text).width;
+                        const textHeight = 20;
+
+                        // Draw background for text
+                        ctx.fillRect(box.x - 210, box.y - textHeight + 130, textWidth + 10, textHeight);
+
+                        // Draw text
+                        ctx.fillStyle = "white";
+                        ctx.fillText(text, box.x + 5 - 210, box.y - 5 + 130);
+
+                        if (label !== "Unknown") {
+                            recognizedFace = true;
+                            //Update customer-info with the recognized name
+                            customerInfo.innerHTML = `
+
+                                
+                                                <svg xmlns="http://www.w3.org/2000/svg" height="40px" viewBox="0 -960 960 960" width="40px"
+                    fill="#999999">
+                    <path
+                        d="M480-480.67q-66 0-109.67-43.66Q326.67-568 326.67-634t43.66-109.67Q414-787.33 480-787.33t109.67 43.66Q633.33-700 633.33-634t-43.66 109.67Q546-480.67 480-480.67ZM160-160v-100q0-36.67 18.5-64.17T226.67-366q65.33-30.33 127.66-45.5 62.34-15.17 125.67-15.17t125.33 15.5q62 15.5 127.28 45.3 30.54 14.42 48.96 41.81Q800-296.67 800-260v100H160Zm66.67-66.67h506.66V-260q0-14.33-8.16-27-8.17-12.67-20.5-19-60.67-29.67-114.34-41.83Q536.67-360 480-360t-111 12.17Q314.67-335.67 254.67-306q-12.34 6.33-20.17 19-7.83 12.67-7.83 27v33.33ZM480-547.33q37 0 61.83-24.84Q566.67-597 566.67-634t-24.84-61.83Q517-720.67 480-720.67t-61.83 24.84Q393.33-671 393.33-634t24.84 61.83Q443-547.33 480-547.33Zm0-86.67Zm0 407.33Z" />
+                </svg>
+                <p><strong>Ahmed Al-Shurafa</strong></p>
+                <p>Age: 45 years</p>
+                <p>Groupe: Customers</p>
+                <p>Address: 123 Maple Avenue, San Francisco, CA</p>
+
+                            `;
+                        };
+                        if (label === "Unknown") {
+                            recognizedFace = false;
+                            //Update customer-info with the recognized name
+                            customerInfo.innerHTML = `
+
+                                
+<b>Unknown</b>
+
+                            `;
+                        }
+                    });
+
+                    // Show or hide customer-info based on recognition
+                    btnRealtime.style.visibility = recognizedFace ? "visible" : "hidden";
+                }, 100);
+            });
+
+
+        });
+    </script>
+</head>
+
+<body>
+    <div class="real-time-container">
+        <!-- Chat content -->
+        <div class="ah-character-chat">
+            <!-- Chat messages will go here -->
+        </div>
+        <!-- Camera and Customer Info -->
+        <div class="camera-customer-info">
+            <div class="camera-feed">
+                <select id="cameraSelect" hidden>
+                    <option value="user">Front Camera</option>
+                    <option value="environment">Back Camera</option>
+                </select>
+                <video id="video" width="600" height="337" autoplay playsinline></video>
+            </div>
+            <div class="customer-info">
+                <b>Unknown</b>
+            </div>
+
+        </div>
+
+        <!-- Call button -->
+        <button class="ah-btn ah-btn-icon btn-character-call" id="btnRealtime" style="visibility: hidden;">
+            <svg xmlns="http://www.w3.org/2000/svg" height="40px" viewBox="0 -960 960 960" width="40px" fill="#FFFFFF">
+                <path
+                    d="M480-415.33q-45.33 0-76.33-32.28t-31-78.39v-247.33q0-44.45 31.29-75.56 31.3-31.11 76-31.11 44.71 0 76.04 31.11 31.33 31.11 31.33 75.56V-526q0 46.11-31 78.39T480-415.33Zm0-232ZM446.67-120v-131.67q-105.34-12-176-90.33Q200-420.33 200-526h66.67q0 88.33 62.36 149.17Q391.38-316 479.86-316q88.47 0 150.97-60.83 62.5-60.84 62.5-149.17H760q0 105.67-70.67 184-70.66 78.33-176 90.33V-120h-66.66ZM480-482q17.67 0 29.17-12.83 11.5-12.84 11.5-31.17v-247.33q0-17-11.69-28.5-11.7-11.5-28.98-11.5t-28.98 11.5q-11.69 11.5-11.69 28.5V-526q0 18.33 11.5 31.17Q462.33-482 480-482Z" />
+            </svg>
+
+        </button>
+</body>
+<script src="front.js"></script>
+<script src="marked.min.js"></script>
+<script src="prism.js"></script>
+
+</html>

@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebSocket Connection</title>
+</head>
+
+<body>
+    <button id="connectButton">Connect</button>
+    <div>
+        <label for="dataToSend">Data to send:</label>
+        <input type="text" id="dataToSend">
+        <button id="sendButton">Send</button>
+    </div>
+    <div>
+        <label for="dataReceived">Data received:</label>
+        <span id="dataReceived"></span>
+    </div>
+    <div>
+        <button id="recordButton">Record</button>
+        <audio id="recordedAudio" controls></audio>
+    </div>
+    <script>
+        let socket;
+        const button = document.getElementById('connectButton');
+        const sendButton = document.getElementById('sendButton');
+        const dataToSend = document.getElementById('dataToSend');
+        const dataReceived = document.getElementById('dataReceived');
+        let mediaRecorder;
+        let audioChunks = [];
+        const recordButton = document.getElementById('recordButton');
+        const recordedAudio = document.getElementById('recordedAudio');
+
+        button.addEventListener('click', () => {
+            if (button.textContent === "Connect") {
+                socket = new WebSocket('ws://localhost:8200/api/realtime-api');
+                socket.onopen = () => {
+                    console.log("Connected!");
+                    button.textContent = "Disconnect";
+                };
+                socket.onmessage = (event) => {
+                    console.log("Received:", event.data);
+                    dataReceived.textContent = event.data;
+                };
+                //socket.send("Test message");
+            } else {
+                socket.close();
+                button.textContent = "Connect";
+            }
+        });
+
+        sendButton.addEventListener('click', () => {
+            if (socket && socket.readyState === WebSocket.OPEN) {
+                socket.send(dataToSend.value);
+                console.log("Sent:", dataToSend.value);
+            } else {
+                console.log("WebSocket is not connected.");
+            }
+        });
+
+        recordButton.addEventListener('click', () => {
+            if (recordButton.textContent === "Record") {
+                navigator.mediaDevices.getUserMedia({ audio: true })
+                    .then(stream => {
+                        mediaRecorder = new MediaRecorder(stream);
+                        mediaRecorder.start();
+                        recordButton.textContent = "Stop Recording";
+                        mediaRecorder.ondataavailable = event => {
+                            audioChunks.push(event.data);
+                        };
+                        mediaRecorder.onstop = () => {
+                            const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
+                            const audioUrl = URL.createObjectURL(audioBlob);
+                            recordedAudio.src = audioUrl;
+                            audioChunks = [];
+                        };
+                    });
+            } else {
+                mediaRecorder.stop();
+                recordButton.textContent = "Record";
+            }
+        });
+    </script>
+</body>
+
+</html>
