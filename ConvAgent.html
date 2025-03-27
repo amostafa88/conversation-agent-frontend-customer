@@ -59,12 +59,9 @@
 
 
             Promise.all([
-                // faceapi.nets.ssdMobilenetv1.loadFromUri("https://raw.githubusercontent.com/justadudewhohacks/face-api.js/master/weights"),
-                // faceapi.nets.faceRecognitionNet.loadFromUri("https://raw.githubusercontent.com/justadudewhohacks/face-api.js/master/weights"),
-                // faceapi.nets.faceLandmark68Net.loadFromUri("https://raw.githubusercontent.com/justadudewhohacks/face-api.js/master/weights")
-                faceapi.nets.ssdMobilenetv1.loadFromUri("/models"),
-                faceapi.nets.faceRecognitionNet.loadFromUri("/models"),
-                faceapi.nets.faceLandmark68Net.loadFromUri("/models"),
+                 faceapi.nets.ssdMobilenetv1.loadFromUri("https://raw.githubusercontent.com/justadudewhohacks/face-api.js/master/weights"),
+                 faceapi.nets.faceRecognitionNet.loadFromUri("https://raw.githubusercontent.com/justadudewhohacks/face-api.js/master/weights"),
+                 faceapi.nets.faceLandmark68Net.loadFromUri("https://raw.githubusercontent.com/justadudewhohacks/face-api.js/master/weights")
 
             ]).then(() => {
                 console.log("Models Loaded Successfully!");
