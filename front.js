@@ -1,6 +1,9 @@
 document.addEventListener("DOMContentLoaded", () => {
     //fill your ip address and port here
-    let websocketUrl = "ws://localhost:8200/api/realtime-api";
+    //let websocketUrl = "ws://localhost:8200/api/realtime-api";
+
+    let websocketUrl = "ws://primary:DziQp6y8VYEs5iLGSVptPifppRvydWbQ0dzeJBgOjH67iqWgIBzYC6AdzcTmC8q8@spring-convagent.test.azuremicroservices.io/spring-convagent-backend/default/api/realtime-api"
+
 
     // Echo realtime chat history
     // Retrieve chat history from local storage
